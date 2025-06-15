@@ -23,7 +23,7 @@ It fetches repository metadata and PR links, and by default only includes **merg
 ## Usage
 
 ```bash
-./generate_pr_table.sh <github_token> <github_username> [filter] [output_file]
+./generate_pr_report.sh <github_token> <github_username> [filter] [output_file]
 ```
 
 - `github_token`: Your GitHub personal access token (recommended: use environment variable or `.gitignore`-safe file)
@@ -39,13 +39,13 @@ It fetches repository metadata and PR links, and by default only includes **merg
 Generate a report of **merged** PRs submitted by `alice`:
 
 ```bash
-./generate_pr_table.sh ghp_abc123456789 alice
+./generate_pr_report.sh ghp_abc123456789 alice
 ```
 
 Generate a report of **all** PRs (including open/unmerged) and save to a custom file:
 
 ```bash
-./generate_pr_table.sh ghp_abc123456789 alice all full-report.md
+./generate_pr_report.sh ghp_abc123456789 alice all full-report.md
 ```
 
 ## Sample Output
