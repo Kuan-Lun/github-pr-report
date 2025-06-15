@@ -1,20 +1,49 @@
 #!/bin/bash
 
-# ====== Parameter configuration ======
-GITHUB_TOKEN="$1"
-USERNAME="$2"
-FILTER_MODE="$3"  # optional: "all" or "merged"
-OUTPUT_FILE="$4"
+# ====== Default values ======
+FILTER_MODE="merged"
+INCLUDE_ISSUES="true"
+OUTPUT_FILE=""
+GITHUB_TOKEN=""
+USERNAME=""
+
+# ====== Parse named arguments ======
+while [[ "$#" -gt 0 ]]; do
+  case $1 in
+    --token)
+      GITHUB_TOKEN="$2"
+      shift
+      ;;
+    --user)
+      USERNAME="$2"
+      shift
+      ;;
+    --filter)
+      FILTER_MODE="$2"
+      shift
+      ;;
+    --include-issues)
+      INCLUDE_ISSUES="$2"
+      shift
+      ;;
+    --output)
+      OUTPUT_FILE="$2"
+      shift
+      ;;
+    *)
+      echo "Unknown parameter: $1"
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 if [ -z "$GITHUB_TOKEN" ] || [ -z "$USERNAME" ]; then
-  echo "Usage: $0 <github-token> <github-username> [filter] [output-file]"
-  echo "  filter: 'all' to include all PRs, default is 'merged' only"
-  echo "  output-file: optional markdown file name (default: <username>-report-YYYYMMDD.md)"
+  echo "Usage: $0 --token <github-token> --user <github-username> [--filter all|merged] [--include-issues true|false] [--output <file>]"
   exit 1
 fi
 
-FILTER_MODE=${FILTER_MODE:-merged}
-OUTPUT_FILE=${OUTPUT_FILE:-"${USERNAME}-report-$(date +%Y%m%d).md"}
+OUTPUT_FILE="${OUTPUT_FILE:-${USERNAME}-report-$(date +%Y%m%d).md}"
 
 HEADER_AUTH="Authorization: token $GITHUB_TOKEN"
 HEADER_ACCEPT="Accept: application/vnd.github.v3+json"
@@ -56,41 +85,46 @@ while :; do
 done
 
 # ====== Issues ======
-echo "Searching issues by $USERNAME..."
-page=1
-while :; do
-  result=$(curl -s -H "$HEADER_AUTH" -H "$HEADER_ACCEPT" \
-    "https://api.github.com/search/issues?q=type:issue+author:$USERNAME+-user:$USERNAME&per_page=100&page=$page")
+if [ "$INCLUDE_ISSUES" = "true" ]; then
+  echo "Searching issues by $USERNAME..."
+  page=1
+  while :; do
+    result=$(curl -s -H "$HEADER_AUTH" -H "$HEADER_ACCEPT" \
+      "https://api.github.com/search/issues?q=type:issue+author:$USERNAME+-user:$USERNAME&per_page=100&page=$page")
 
-  count=$(echo "$result" | jq '.items | length')
-  [[ "$count" -eq 0 ]] && break
+    count=$(echo "$result" | jq '.items | length')
+    [[ "$count" -eq 0 ]] && break
 
-  while IFS=$'\t' read -r repo_api_url repo_full_name issue_url issue_number; do
-    REPO_ISSUE_MAP["$repo_full_name"]+="$issue_number $issue_url"$'\n'
-  done < <(echo "$result" | jq -r '
-    .items[] |
-    [
-      .repository_url,
-      (.repository_url | sub("https://api.github.com/repos/"; "")),
-      .html_url,
-      .number
-    ] | @tsv')
+    while IFS=$'\t' read -r repo_api_url repo_full_name issue_url issue_number; do
+      REPO_ISSUE_MAP["$repo_full_name"]+="$issue_number $issue_url"$'\n'
+    done < <(echo "$result" | jq -r '
+      .items[] |
+      [
+        .repository_url,
+        (.repository_url | sub("https://api.github.com/repos/"; "")),
+        .html_url,
+        .number
+      ] | @tsv')
 
-  ((page++))
-done
+    ((page++))
+  done
+fi
 
 # ====== Output Markdown table ======
-# Determine PR column title
 if [ "$FILTER_MODE" = "all" ]; then
   pr_column_title="PRs (all)"
 else
   pr_column_title="PRs (merged)"
 fi
 
-echo "| REPO | Stars | Forks | Watchers | Issues | Contributors | $pr_column_title | Issues (opened) |" > "$OUTPUT_FILE"
-echo "| --- | --- | --- | --- | --- | --- | --- | --- |" >> "$OUTPUT_FILE"
+if [ "$INCLUDE_ISSUES" = "true" ]; then
+  echo "| REPO | Stars | Forks | Watchers | Issues | Contributors | $pr_column_title | Issues (opened) |" > "$OUTPUT_FILE"
+  echo "| --- | --- | --- | --- | --- | --- | --- | --- |" >> "$OUTPUT_FILE"
+else
+  echo "| REPO | Stars | Forks | Watchers | Issues | Contributors | $pr_column_title |" > "$OUTPUT_FILE"
+  echo "| --- | --- | --- | --- | --- | --- | --- |" >> "$OUTPUT_FILE"
+fi
 
-# Union of all repos that have PRs or Issues
 repos=$(printf "%s\n%s\n" "${!REPO_PR_MAP[@]}" "${!REPO_ISSUE_MAP[@]}" | sort -u)
 
 for repo in $repos; do
@@ -121,13 +155,19 @@ for repo in $repos; do
   done <<< "${REPO_PR_MAP[$repo]}"
 
   issues_out=""
-  while IFS= read -r line; do
-    issue_number=$(echo "$line" | awk '{print $1}')
-    issue_url=$(echo "$line" | awk '{print $2}')
-    [[ "$issue_number" && "$issue_url" == http* ]] && issues_out+=" [#${issue_number}](${issue_url})"
-  done <<< "${REPO_ISSUE_MAP[$repo]}"
+  if [ "$INCLUDE_ISSUES" = "true" ]; then
+    while IFS= read -r line; do
+      issue_number=$(echo "$line" | awk '{print $1}')
+      issue_url=$(echo "$line" | awk '{print $2}')
+      [[ "$issue_number" && "$issue_url" == http* ]] && issues_out+=" [#${issue_number}](${issue_url})"
+    done <<< "${REPO_ISSUE_MAP[$repo]}"
+  fi
 
-  echo "| [$repo](https://github.com/$repo) | $stars | $forks | $watchers | $issues | $contributors |$prs |$issues_out |" >> "$OUTPUT_FILE"
+  if [ "$INCLUDE_ISSUES" = "true" ]; then
+    echo "| [$repo](https://github.com/$repo) | $stars | $forks | $watchers | $issues | $contributors |$prs |$issues_out |" >> "$OUTPUT_FILE"
+  else
+    echo "| [$repo](https://github.com/$repo) | $stars | $forks | $watchers | $issues | $contributors |$prs |" >> "$OUTPUT_FILE"
+  fi
 done
 
 echo "Done. Output written to: $OUTPUT_FILE"
