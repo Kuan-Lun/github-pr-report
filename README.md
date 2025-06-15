@@ -1,68 +1,62 @@
-# GitHub PR Contribution Reporter
+# GitHub Contribution Report Generator
 
-This is a Bash script that generates a Markdown table summarizing pull requests submitted by a specific GitHub user to repositories they do **not own**.
-
-It fetches repository metadata and PR links, and by default only includes **merged pull requests**. Output is written to a Markdown file.
+This script generates a Markdown table summarizing a GitHub user's pull requests (PRs) — and optionally issues — contributed to repositories **not owned** by the user. It is useful for auditing open-source contributions beyond green squares or self-starred repos.
 
 ## Features
 
-- Lists public pull requests made by a given user to other repositories
-- Excludes PRs to repositories owned by the same user
-- Fetches repository metadata: stars, forks, watchers, open issues, contributors
-- By default, includes only merged PRs
-- Supports listing all PRs (`all` mode)
-- Outputs a Markdown table with repository and PR information
-- Customizable output file name
+* Fetches **pull requests** (merged or all) made to others' repositories
+* (Optional) Fetches **issues** opened in others' repositories
+* Reports repository stats: stars, forks, watchers, open issues, contributors
+* Outputs to a Markdown table file for easy sharing
+
+## Example Output
+
+| REPO                                      | Stars | Forks | Watchers | Issues | Contributors | PRs (merged)                                  | Issues (opened)                                 |
+| ----------------------------------------- | ----- | ----- | -------- | ------ | ------------ | --------------------------------------------- | ----------------------------------------------- |
+| [some1/repo](https://github.com/some1/repo) | 42    | 7     | 12       | 5      | 9            | [#123](https://github.com/some1/repo/pull/123) | [#456](https://github.com/some1/repo/issues/456) |
+| [some2/repo](https://github.com/some2/repo) | 5    | 0     | 1       | 3      | 2            |  | [#789](https://github.com/some2/repo/issues/789) [#1001](https://github.com/some2/repo/issues/1001) |
 
 ## Requirements
 
-- Bash
-- [`jq`](https://stedolan.github.io/jq/) (for JSON parsing)
-- GitHub Personal Access Token (with `public_repo` scope)
+* Bash (Unix-based OS)
+* [`curl`](https://curl.se/)
+* [`jq`](https://stedolan.github.io/jq/)
+* A [GitHub personal access token](https://github.com/settings/tokens) with `public_repo` scope
 
 ## Usage
 
 ```bash
-./generate_pr_report.sh <github_token> <github_username> [filter] [output_file]
+bash generate_contrib_report.sh \
+  --token <your-github-token> \
+  --user <github-username> \
+  --filter merged \
+  --include-issues true \
+  --output <output-file>.md
 ```
 
-- `github_token`: Your GitHub personal access token (recommended: use environment variable or `.gitignore`-safe file)
-- `github_username`: GitHub username to analyze
-- `filter` *(optional)*:
+### Parameters
 
-  - `merged` (default): Only include merged PRs
-  - `all`: Include all PRs (merged and unmerged)
-- `output_file` *(optional)*: Output file name (default: `<username>-report-<date>.md`, e.g., `alice-report-20250615.md`)
+* `--token` (required): Your GitHub personal access token
+* `--user` (required): GitHub username to analyze
+* `--filter` *(optional)*: `merged` (default) or `all`
+* `--include-issues` *(optional)*: `true` (default) or `false`
+* `--output` *(optional)*: Output file name (default: `<username>-report-YYYYMMDD.md`)
 
-## Examples
-
-Generate a report of **merged** PRs submitted by `alice`:
+## Example
 
 ```bash
-./generate_pr_report.sh ghp_abc123456789 alice
+bash generate_contrib_report.sh \
+  --token ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX \
+  --user octocat \
+  --filter merged \
+  --include-issues true \
+  --output octocat-report.md
 ```
-
-Generate a report of **all** PRs (including open/unmerged) and save to a custom file:
-
-```bash
-./generate_pr_report.sh ghp_abc123456789 alice all full-report.md
-```
-
-## Sample Output
-
-The script outputs a Markdown table like this:
-
-| REPO                                                      | Stars | Forks | Watchers | Issues | Contributors | PRs                                                                                                 |
-| --------------------------------------------------------- | ----- | ----- | -------- | ------ | ------------ | --------------------------------------------------------------------------------------------------- |
-| [someuser/somerepo](https://github.com/someuser/somerepo) | 134   | 27    | 5        | 12     | 8            | [#1](https://github.com/someuser/somerepo/pull/1) [#3](https://github.com/someuser/somerepo/pull/3) |
 
 ## Notes
 
-- Only **public repositories and public pull requests** are included.
-- PRs to the user's own repositories are automatically excluded.
-- Uses the GitHub REST API v3. Authenticated requests support up to 5000 calls/hour.
-- For users with many PRs, the script handles pagination and metadata requests automatically.
-- Performance may be slower in `all` mode due to additional API calls.
+* Only PRs and issues **to repositories not owned by the user** are included
+* If `--include-issues` is set to `false`, the final column is omitted
 
 ## License
 
